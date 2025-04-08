@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Invaders Coop</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        canvas {
+            display: block;
+            background-color: #111;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <button id="resumeButton" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; padding: 10px 20px; display: none;">Riprendi</button>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let isPaused = false;
+
+        // Navetta più grande
+        const ship = {
+            x: canvas.width / 2 - 75,
+            y: canvas.height - 80,
+            width: 150,  
+            height: 50,
+            speed: 5
+        };
+
+        // Cannoni verticali
+        const leftCannon = { x: ship.x - 30, y: ship.y + 10, width: 20, height: 60 };
+        const rightCannon = { x: ship.x + ship.width + 10, y: ship.y + 10, width: 20, height: 60 };
+
+        const projectiles = [];
+        let lastFired = 0; 
+
+        // Mappa che scorre
+        const background = { y: 0, speed: 2, height: canvas.height, width: canvas.width };
+
+        // Stelle che scorrono
+        const stars = [];
+        const numStars = 150;
+        const starSpeed = 4;
+
+        const enemies = [];
+        const enemySpeed = 2;
+        const enemyWidth = 80;
+        const enemyHeight = 50;
+
+        for (let i = 0; i < numStars; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                length: Math.random() * 3 + 1,
+                speed: Math.random() * starSpeed + 2
+            });
+        }
+
+        const keys = {};
+        window.addEventListener("keydown", (e) => {
+            keys[e.key] = true;
+            if (e.key.toLowerCase() === "p") {
+                togglePause();
+            }
+        });
+        window.addEventListener("keyup", (e) => keys[e.key] = false);
+
+        document.getElementById("resumeButton").addEventListener("click", () => {
+            togglePause();
+        });
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById("resumeButton").style.display = isPaused ? "block" : "none";
+            if (!isPaused) gameLoop();
+        }
+
+        function drawPauseScreen() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.font = "40px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("Gioco in pausa", canvas.width / 2, canvas.height / 4);
+        }
+
+        function spawnEnemy() {
+            const x = Math.random() * (canvas.width - enemyWidth);
+            enemies.push({ x, y: -enemyHeight, width: enemyWidth, height: enemyHeight, hits: 0 });
+        }
+
+        function updateEnemies() {
+            for (let i = 0; i < enemies.length; i++) {
+                enemies[i].y += enemySpeed;
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    i--;
+                }
+            }
+        }
+
+        function drawEnemies() {
+            ctx.fillStyle = "purple";
+            for (let i = 0; i < enemies.length; i++) {
+                ctx.fillRect(enemies[i].x, enemies[i].y, enemies[i].width, enemies[i].height);
+            }
+        }
+
+        function checkCollisions() {
+            for (let i = 0; i < projectiles.length; i++) {
+                for (let j = 0; j < enemies.length; j++) {
+                    if (
+                        projectiles[i].x < enemies[j].x + enemies[j].width &&
+                        projectiles[i].x + projectiles[i].width > enemies[j].x &&
+                        projectiles[i].y < enemies[j].y + enemies[j].height &&
+                        projectiles[i].y + projectiles[i].height > enemies[j].y
+                    ) {
+                        enemies[j].hits++;
+                        projectiles.splice(i, 1);
+                        i--;
+
+                        if (enemies[j].hits >= 3) {
+                            enemies.splice(j, 1);
+                            j--;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        setInterval(spawnEnemy, 2000);
+
+        function update() {
+            const now = Date.now();
+            
+            // Scorrimento del background
+            background.y += background.speed;
+            if (background.y >= canvas.height) background.y = 0;
+
+            // Aggiornamento delle stelle
+            for (let i = 0; i < stars.length; i++) {
+                stars[i].y += stars[i].speed;
+                if (stars[i].y > canvas.height) {
+                    stars[i].y = 0;
+                    stars[i].x = Math.random() * canvas.width;
+                }
+            }
+
+            // Gestione della navetta
+            if (keys["ArrowLeft"] && ship.x > 0) ship.x -= ship.speed;
+            if (keys["ArrowRight"] && ship.x < canvas.width - ship.width) ship.x += ship.speed;
+
+            // Posizione dei cannoni
+            leftCannon.x = ship.x - 30;
+            rightCannon.x = ship.x + ship.width + 10;
+
+            if ((keys[" "] || keys["ArrowUp"]) && now - lastFired > 500) {
+                fireProjectile();
+                lastFired = now;
+            }
+
+            // Aggiorna la posizione dei proiettili
+            for (let i = 0; i < projectiles.length; i++) {
+                projectiles[i].y -= projectiles[i].speed;
+                if (projectiles[i].y < 0) {
+                    projectiles.splice(i, 1);
+                    i--;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Disegna il background che scorre
+            ctx.fillStyle = "#000"; 
+            ctx.fillRect(0, background.y, background.width, background.height);
+            ctx.fillRect(0, background.y - canvas.height, background.width, background.height);
+
+            // Disegna le stelle bianche al massimo **dopo** il background
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "white";
+            ctx.globalAlpha = 1; // Opacità massima
+            for (let i = 0; i < stars.length; i++) {
+                ctx.beginPath();
+                ctx.moveTo(stars[i].x, stars[i].y);
+                ctx.lineTo(stars[i].x, stars[i].y + stars[i].length);
+                ctx.stroke();
+            }
+
+            // Disegna la navetta
+            ctx.fillStyle = "white";
+            ctx.fillRect(ship.x, ship.y, ship.width, ship.height);
+
+            // Disegna i due cannoni
+            ctx.fillStyle = "red";
+            ctx.fillRect(leftCannon.x, leftCannon.y, leftCannon.width, leftCannon.height);
+            ctx.fillRect(rightCannon.x, rightCannon.y, rightCannon.width, rightCannon.height);
+            ctx.fillRect(leftCannon.x - 30, leftCannon.y, leftCannon.width, leftCannon.height);
+            ctx.fillRect(rightCannon.x + 30, rightCannon.y, rightCannon.width, rightCannon.height);
+
+            // Disegna i proiettili
+            ctx.fillStyle = "yellow";
+            for (let i = 0; i < projectiles.length; i++) {
+                ctx.fillRect(projectiles[i].x, projectiles[i].y, projectiles[i].width, projectiles[i].height);
+            }
+        }
+
+        function fireProjectile() {
+            const projectileLeft = { x: leftCannon.x + (leftCannon.width / 2) - 5, y: leftCannon.y - 10, width: 10, height: 20, speed: 8 };
+            const projectileRight = { x: rightCannon.x + (rightCannon.width / 2) - 5, y: rightCannon.y - 10, width: 10, height: 20, speed: 8 };
+            const projectileRight2 = { x: rightCannon.x + (rightCannon.width / 2) - 5 + 30, y: rightCannon.y - 10, width: 10, height: 20, speed: 8 };
+            const projectileLeft2 = { x: leftCannon.x + (leftCannon.width / 2) - 5 - 30, y: leftCannon.y - 10, width: 10, height: 20, speed: 8 };
+
+            projectiles.push(projectileLeft, projectileRight, projectileRight2, projectileLeft2);
+        }
+
+        function gameLoop() {
+            if (isPaused) {
+                drawPauseScreen();
+                return;
+            }
+            update();
+            updateEnemies();
+            checkCollisions();
+            draw();
+            drawEnemies();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
